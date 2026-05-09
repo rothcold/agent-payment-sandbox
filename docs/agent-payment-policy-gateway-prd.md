@@ -4,7 +4,7 @@
 - Date: 2026-05-02
 - Owner: TBD
 - Primary wedge: AP2/x402 developer sandbox + buyer-side payment guard
-- Distribution: Rust single binary
+- Distribution: Rust single binary (`agent-payment-sandbox`)
 
 ## 1. Summary
 
@@ -16,7 +16,21 @@ The first version is not a generic API cost dashboard. It is a developer tool fo
 
 The product must always be able to compile into one distributable binary. The first release should be a Rust CLI that can run a local sandbox and an HTTP proxy from the same executable.
 
-## 2. Problem
+## 2. Validation Gate
+
+**Do not begin implementation until this gate is cleared.**
+
+Interview or DM 10 AP2/x402 builders. Ask one question:
+
+> "Show me the payment flow you are trying to build. Where would you want a sandbox, policy check, or audit trace?"
+
+Do not ask whether they like the idea. Ask for their actual flow.
+
+If fewer than 3 people can show a real or near-real payment flow, keep the product as developer tooling and avoid positioning it as production spend control.
+
+This gate exists because AP2/x402 production usage is still very small. The largest risk for this product is building ahead of demand.
+
+## 3. Problem
 
 Agent-native payments are early. x402 production usage is still small, and many teams that say "agent payment" today actually mean Stripe API calls, prepaid API keys, or human-approved execution.
 
@@ -39,7 +53,7 @@ Even if a user authorized an agent to spend, the agent still needs runtime check
 
 Without this layer, agent payment builders either ship unsafe demos or hardcode one-off guardrails into each integration.
 
-## 3. Target Users
+## 4. Target Users
 
 ### Primary User
 
@@ -61,7 +75,7 @@ Examples:
 - Small team letting an internal agent buy data, services, or API access.
 - Early enterprise platform team experimenting with agent commerce.
 
-## 4. Product Positioning
+## 5. Product Positioning
 
 Working name:
 
@@ -86,7 +100,7 @@ What it is not:
 - Not a replacement for AP2 or x402.
 - Not a full enterprise spend-management suite in v1.
 
-## 5. Core Use Cases
+## 6. Core Use Cases
 
 ### Use Case 1: Simulate an x402 Payment Flow
 
@@ -127,9 +141,9 @@ A developer opens the audit log for a blocked payment and sees:
 
 Success means the developer can debug payment behavior without reconstructing logs from multiple systems.
 
-## 6. MVP Scope
+## 7. MVP Scope
 
-### 6.1 Protocol Adapter Interface
+### 7.1 Protocol Adapter Interface
 
 Create a protocol abstraction that normalizes payment attempts across x402, AP2, and future protocols.
 
@@ -160,7 +174,7 @@ Initial adapters:
 - AP2 adapter: parse the full AP2 mandate structure as closely as practical against the official spec.
 - Future adapters: implement the same normalized interface without changing the policy engine.
 
-### 6.2 Policy Engine
+### 7.2 Policy Engine
 
 Support simple deterministic policy rules:
 
@@ -178,10 +192,10 @@ Policy decisions:
 
 - `allow`
 - `block`
-- `require_approval`
+- `require_approval` — gateway blocks the payment attempt and records an approval-needed decision. In sandbox mode, the CLI may present a synchronous prompt. In proxy mode, v1 returns a blocked response with the decision reason; async approval queues are deferred.
 - `simulate_only`
 
-### 6.3 Sandbox Mode
+### 7.3 Sandbox Mode
 
 Sandbox mode is the default v1 experience.
 
@@ -196,7 +210,7 @@ Capabilities:
 - Show policy decision traces.
 - Export audit logs as JSON.
 
-### 6.4 Buyer-Side Runtime Guard
+### 7.4 Buyer-Side Runtime Guard
 
 Provide a local HTTP proxy that developers can put in front of agent payment calls.
 
@@ -207,7 +221,7 @@ Integration options:
 
 v1 should prioritize CLI sandbox and local HTTP proxy. SDKs can come later, but they must not become required for the core product to work.
 
-### 6.5 Audit Log
+### 7.5 Audit Log
 
 Every payment attempt must produce an immutable event record:
 
@@ -230,7 +244,7 @@ Each event should include:
 - Decision reason
 - Raw protocol payload reference
 
-## 7. Non-Goals for MVP
+## 8. Non-Goals for MVP
 
 - Real card issuing
 - Full wallet custody
@@ -241,7 +255,7 @@ Each event should include:
 - Deep accounting integrations
 - Production-grade multi-region settlement infrastructure
 
-## 8. User Flow
+## 9. User Flow
 
 1. Developer downloads one binary.
 2. Developer defines a policy file.
@@ -254,9 +268,9 @@ Each event should include:
 9. Gateway records an audit event.
 10. Developer reviews the trace in the CLI.
 
-## 9. Architecture Decisions
+## 10. Architecture Decisions
 
-### 9.1 Single Binary Constraint
+### 10.1 Single Binary Constraint
 
 The main implementation language is Rust.
 
@@ -271,7 +285,7 @@ The project must always be able to compile into a single binary that includes:
 
 This constraint is part of the product, not an implementation detail. Early users should be able to download one executable and run the full developer experience locally.
 
-### 9.2 Interface Decisions
+### 10.2 Interface Decisions
 
 First interface:
 
@@ -284,7 +298,7 @@ Deferred interfaces:
 - Hosted dashboard
 - SaaS control plane
 
-### 9.3 Protocol Decisions
+### 10.3 Protocol Decisions
 
 x402 target:
 
@@ -293,10 +307,19 @@ x402 target:
 
 AP2 target:
 
-- Parse the full AP2 mandate structure as closely as practical.
-- Store raw AP2 payloads in the audit log so parser behavior can be revalidated as the spec changes.
+- Parse the full AP2 mandate structure as closely as practical against the current spec version at build time.
+- Record the AP2 spec version alongside every audit event so old logs can be re-parsed when the spec changes.
+- Store raw AP2 payloads in the audit log so parser behavior can be revalidated as the spec evolves.
+- Do not pin to a fixed AP2 spec version. Track the spec as it changes and maintain a changelog of adapter behavior changes.
 
-### 9.4 Policy Format
+x402 and chain scope:
+
+- x402 is not modeled as EVM-only. The canonical model must preserve CAIP-2 network identifiers so future adapters can support EVM, Solana, Stellar, Aptos, or other x402-supported networks without changing the policy engine.
+- v1 includes one production-shaped x402 sample targeting USDC on Base via Coinbase CDP.
+- The `network` field should use explicit CAIP-2 values such as `eip155:8453` for Base mainnet. Avoid ambiguous network names such as `base` in persisted audit records.
+- Broader network support can be added later when protocol usage patterns are more stable.
+
+### 10.4 Policy Format
 
 Policy files use YAML in v1.
 
@@ -306,7 +329,21 @@ Reason:
 - Familiar to infra/devtool users.
 - Good fit for examples, tutorials, and local sandbox runs.
 
-### 9.5 Sandbox Simulation
+Policy file loading order (first match wins):
+
+1. `--policy` CLI flag
+2. `AGENT_PAYMENT_POLICY` environment variable
+3. `./agent-payment-policy.yaml` in the current directory
+
+### 10.5 Fail Behavior
+
+When the gateway is unreachable or encounters an unhandled internal error, the default behavior is **fail-closed**: the payment attempt is blocked and an error is returned to the agent. The agent must not proceed with payment when the gateway is unavailable.
+
+This is a hard default. There is no fail-open mode in v1.
+
+Audit events are written for failed gateway attempts so the developer can identify unavailability windows.
+
+### 10.6 Sandbox Simulation
 
 Sandbox includes fake wallet and settlement simulation.
 
@@ -321,7 +358,9 @@ Required states:
 - Payment blocked after mandate parse
 - Payment blocked after policy evaluation
 
-## 10. Example Policy
+Fake wallet state persists within a single sandbox run and resets on restart unless a `--state-file` path is provided. When a state file is used, wallet balances and task-level spend totals survive restarts. This enables testing of per-task cumulative limits across multiple agent calls.
+
+## 11. Example Policy
 
 ```yaml
 agent: coding-agent-local
@@ -352,7 +391,7 @@ approval:
     currency: USD
 ```
 
-## 11. Success Metrics
+## 12. Success Metrics
 
 ### Product Validation Metrics
 
@@ -369,7 +408,7 @@ approval:
 - Protocol adapters can be added without changing the policy engine.
 - The project can compile into one binary at all times.
 
-## 12. Risks
+## 13. Risks
 
 ### Market Timing Risk
 
@@ -421,7 +460,7 @@ Mitigation:
 - Add optional hosted services later without making them required for local operation.
 - Keep the Rust crate boundaries clean so future SDKs and services can reuse the core logic.
 
-## 13. Recommended MVP Build Order
+## 14. Recommended MVP Build Order
 
 1. Define the normalized payment attempt model.
 2. Create Rust project skeleton that builds one binary.
@@ -434,37 +473,29 @@ Mitigation:
 9. Add packaged binary release flow.
 10. Add minimal web dashboard only if it can be served from the same binary or kept clearly optional.
 
-## 14. Resolved Product Decisions
+## 15. Resolved Product Decisions
 
+- Binary name: `agent-payment-sandbox`
 - First interface: CLI sandbox plus local HTTP proxy.
-- x402 compatibility target: official x402 documentation and reference concepts.
-- AP2 parsing scope: full AP2 mandate structure as closely as practical.
-- Policy format: YAML.
-- Sandbox simulation: fake wallet balance, reserved funds, and settlement states.
+- x402 compatibility target: official x402 documentation and reference concepts. v1 sample network: Base mainnet (`eip155:8453`). Facilitator: Coinbase CDP.
+- AP2 parsing scope: full AP2 mandate structure, continuously tracked against spec evolution.
+- Policy format: YAML. Loading order: `--policy` flag → `AGENT_PAYMENT_POLICY` env var → `./agent-payment-policy.yaml`.
+- Sandbox simulation: fake wallet balance, reserved funds, and settlement states. State persists within a run; use `--state-file` to persist across runs.
+- Fail behavior: fail-closed. No fail-open mode in v1.
+- `require_approval` behavior: sandbox mode may use a synchronous CLI prompt; proxy mode blocks and records the decision, with async approval queues deferred.
+- OS support: macOS and Linux. Windows deferred.
+- Audit log storage: SQL database. SQLite for demo/local use, PostgreSQL for production. Adapter layer must support both without changing the schema.
+- Proxy HTTPS: HTTPS interception supported in v1.
+- x402 sample: v1 includes one real x402 integration (not mock-only).
+- Fake wallet scope: v1 locked to USDC on Base. Multi-currency and multi-network deferred.
+- Release channel: GitHub Releases first. Homebrew and `cargo install` deferred.
 - Distribution: downloadable binary.
 - Main implementation language: Rust.
 - Hard architecture constraint: project must always compile into one single binary.
 
-## 15. Remaining Open Questions
+## 16. Remaining Open Questions
 
-- What should the binary be named?
-- Which operating systems are required for the first release: macOS, Linux, Windows?
-- Should the first audit log storage be JSONL, SQLite, or both?
-- Should the local proxy support HTTPS interception in v1, or only explicit HTTP proxying?
-- What exact AP2 spec version should v1 pin to?
-- Should v1 include one real x402 sample integration, or only mock/reference-compatible flows?
-- Should the fake wallet model support multiple currencies and networks in v1?
-- What is the first release channel: GitHub Releases, Homebrew, cargo install, or all of these?
-
-## 16. Assignment
-
-Before implementation, interview or DM 10 AP2/x402 builders and ask for one concrete trace:
-
-> "Show me the payment flow you are trying to build. Where would you want a sandbox, policy check, or audit trace?"
-
-Do not ask whether they like the idea. Ask for their actual flow.
-
-If fewer than 3 people can show a real or near-real payment flow, keep the product as developer tooling and avoid positioning it as production spend control.
+- AP2 spec is continuously tracked (no pin). Should there be a documented minimum spec version for compatibility guarantees?
 
 ## 17. References
 
@@ -473,3 +504,4 @@ If fewer than 3 people can show a real or near-real payment flow, keep the produ
 - x402 official docs: https://docs.x402.org/
 - x402 website: https://www.x402.org/
 - Base x402 payment flow docs: https://docs.base.org/ai-agents/core-concepts/payments-and-transactions
+- Coinbase CDP x402 docs: https://docs.cdp.coinbase.com/x402/welcome
