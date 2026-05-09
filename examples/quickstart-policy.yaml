@@ -1,0 +1,27 @@
+agent: my-agent
+mode: sandbox
+version: v1
+limits:
+  max_per_payment:
+    amount: "0.25"
+    currency: USD
+  max_per_task:
+    amount: "5.00"
+    currency: USD
+  max_payments_per_minute: 10
+  duplicate_window_seconds: 30
+allow:
+  merchants:
+    - api.example.com
+    - data.vendor.com
+  currencies:
+    - USDC
+  networks:
+    - base
+block:
+  merchants:
+    - evil.com
+approval:
+  required_above:
+    amount: "1.00"
+    currency: USD

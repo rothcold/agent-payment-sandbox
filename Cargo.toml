@@ -1,0 +1,67 @@
+[package]
+name = "agent-payment-sandbox"
+version = "0.1.0"
+edition = "2024"
+description = "Sandbox and policy gateway for AP2/x402 agent payments"
+license = "Apache-2.0"
+
+[[bin]]
+name = "agent-payment-sandbox"
+path = "src/main.rs"
+
+[features]
+default = ["sqlite"]
+sqlite = ["sqlx/sqlite"]
+postgres = ["sqlx/postgres"]
+example-cdp = [
+    "dep:alloy-primitives",
+    "dep:alloy-signer",
+    "dep:alloy-signer-local",
+    "dep:alloy-sol-types",
+    "dep:rand",
+]
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "env"] }
+rust_decimal = { version = "1", features = ["serde-with-str"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sqlx = { version = "0.8", features = ["runtime-tokio", "chrono", "uuid", "json", "rust_decimal", "macros"] }
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Proxy + HTTPS MITM stack.
+base64 = "0.22"
+bytes = "1"
+hex = "0.4"
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+rcgen = { version = "0.13", default-features = false, features = ["pem", "ring", "x509-parser"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls-pemfile = "2"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+
+# Optional deps used only by the example-cdp example (heavy crypto).
+alloy-primitives = { version = "1", optional = true }
+alloy-signer = { version = "1", optional = true }
+alloy-signer-local = { version = "1", optional = true }
+alloy-sol-types = { version = "1", optional = true }
+rand = { version = "0.9", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[[example]]
+name = "x402_cdp"
+required-features = ["example-cdp"]
