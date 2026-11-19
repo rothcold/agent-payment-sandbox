@@ -1,1 +1,10 @@
 done/
+/target
+*.db
+*.sqlite
+*.sqlite-journal
+.env
+ca/
+*.key.pem
+*.key
+agent-payment-audit.db
